@@ -8,6 +8,7 @@ Load and save your favorite queries.
 Suited for analysing IIS log files.
 
 Tutorial:
+
 1. Start awkgui.hta by double clicking.
 2. Choose the input file "test.log" (a sample IIS log file)
 3. Choose the count_ip.awk sample awk script
