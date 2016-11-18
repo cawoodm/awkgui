@@ -1,0 +1,438 @@
+<html>
+<head>
+<title>AWK GUI</title>
+<meta name="author" value="Marc Cawood">
+<HTA:APPLICATION ID="oMyApp" 
+ APPLICATIONNAME="AWKGUI" 
+ BORDER="thick"
+ CAPTION="yes"
+ CONTEXTMENU="no"
+ SHOWINTASKBAR="yes"
+ SINGLEINSTANCE="yes"
+ SYSMENU="yes"
+ SCROLLFLAT="no"
+ WINDOWSTATE="normal">
+ 
+<style>
+ body, table, tr, td, input, select, span, textarea {font-family:Verdana; font-size:8pt;}
+ table.display {background:#FFFFFF; border:2px groove silver;}
+ table.display th {background:#000080; color:white;}
+ table.display th.th1 {background:#0080DD; color:white;}
+ table.display td {background:#DDDDFF;}
+ table.display td.white {background:#FFFFFF;}
+ input {height:18px; border:1px solid #000080;}
+ span.click {cursor:hand;}
+ div.h2 {font-family:Verdana; font-size:16pt;}
+ textarea {width:100%; border:1px solid #000080;}
+ a.banner:visited {color:white;}
+</style>
+<script language="vbscript" src="functions.vbs"></script>
+<script language="vbscript">
+Dim fso, wShell, path
+Set fso    = CreateObject("Scripting.FileSystemObject")
+Set wShell = CreateObject("WScript.Shell")
+
+Function runAWK(inputfile, outputfile)
+   Dim program, strData
+   
+   ' Update logic
+   logicChange()
+   
+   ' Do we have a pattern?
+   program = document.forms.condform.awkpattern.value & document.forms.condform.awkprogram.value
+
+   If program = "" Then
+      alert("Error: Please enter or choose an AWK Pattern.")
+      Exit Function
+   End If
+
+   ' Save the AWK pattern/program
+   Call SaveToFile("awkgui.awk", program)
+   
+   ' Run AWK
+   Dim Command
+   Command = "mawk.exe -f " & path & "awkgui.awk " & inputfile & " > " & outputfile
+   Call SaveToFile("awkgui.bat", Command)
+   Call wShell.Run("awkgui.bat", 1, True)
+   
+   ' Show results from top 300 input rows
+   Call LoadFromFileTop(outputfile, strData, 300)
+   document.forms.ioform.sampleoutput.value = strData
+   If strData = "" Then
+      alert("No matches, the output is empty.")
+   Else
+      'Call DeleteFile("awkgui.awk")
+      'Call DeleteFile("awkgui.bat")
+   End If
+End Function
+
+Function runAWKMain()
+   Dim inputFile, outputFile, program
+   
+   ' Do we have input?
+   inputFile = document.fileform.inputfile.value
+   If inputFile = "" Then
+      alert("Error: Please select an input file by clicking ""Browse..."".")
+      Exit Function
+   ElseIf Not FileExists(inputfile) Then
+      alert("Error: Input file does not exist.")
+      Exit Function
+   End If
+
+   ' Do we have and output destination?
+   outputfile = document.fileform.outputfile.value
+   If outputFile = "" Then
+      alert("Output will be saved to op.txt.")
+      outputfile = "op.txt"
+      Call DeleteFile(outputfile)
+   End If
+
+   Call runAWK(inputFile, outputFile)
+End Function
+
+Function runAWKSample()
+
+   ' Save the sample input
+   Call SaveToFile("ip.txt", document.forms.ioform.sampleinput.value)
+   ' RunAWK program on sample data
+   Call DeleteFile("op2.txt")
+   Call runAWK("ip.txt", "op2.txt")
+   Call DeleteFile("ip.txt")
+   Call DeleteFile("op2.txt")
+End Function
+
+Function addCondition()
+' Add a condition
+   Dim i, no, condform, rowno, table, row, innerHTML
+   
+   Set condform = document.forms.condform
+   no = condform.conditions.value
+   condform.conditions.value = condform.conditions.value + 1
+   
+   
+   Set table = document.all("condtable")
+   Set row = table.insertRow(no+2)
+   rowno = row.rowIndex
+   For i=0 To table.rows(rowno-1).cells.length-1
+      innerHTML = table.rows(rowno-1).cells(i).innerHTML
+      innerHTML = replace(innerHTML, "_" & (no), "_" & (no+1))
+      Set cell = row.insertCell()
+      cell.innerHTML = innerHTML
+   Next
+   ' Default logic to "And"
+   condform("logic_" & (no + 1)).selectedIndex = 1
+End Function
+
+Function showPattern()
+   Dim i, no, condform, temp, logic, field, filter, value
+   
+   temp = ""
+   Set condform = document.forms.condform
+   
+   no = condform.conditions.value
+   
+   For i=1 To no
+      logic  = condform("logic_" & i).value
+      field  = condform("field_" & i).value
+      filter = condform("filter_" & i).value
+      value  = condform("value_" & i).value
+      
+      If filter = "custom" Then
+         temp = temp & value
+      ElseIf logic=")" Then
+         temp = temp & logic
+      Else
+         if i>1 Then temp = temp & " " & logic
+         temp = temp & "$" & field
+         Select Case (filter)
+            Case "equal":
+               value  = replace(value, """", "\""")
+               temp = temp & "==""" & value & """"
+            Case "!equal":
+               value  = replace(value, """", "\""")
+               temp = temp & "!=""" & value & """"
+            Case "contain":
+               value  = replace(value, "/", "\/")
+               temp = temp & "~/" & value & "/"
+            Case "!contain":
+               value  = replace(value, "/", "\/")
+               temp = temp & "!~/" & value & "/"
+            Case "start":
+               value  = replace(value, "/", "\/")
+               temp = temp & "~/^" & value & "/"
+            Case "end":
+               value  = replace(value, "/", "\/")
+               temp = temp & "~/" & value & "$/"
+            Case Else:
+               value  = replace(value, "/", "\/")
+               temp = temp & "~/" & value & "/"
+         End Select
+      End If
+   Next
+   condform.awkpattern.value = temp
+End Function
+
+Function logicChange()
+   Dim el
+
+   Set el = window.event.srcElement
+
+   ' First logic can only be 0 or 1
+   If el.name="logic_1" Then
+      If el.selectedIndex>1 Then el.selectedIndex = 0
+   End If
+   
+   If document.all("logic_1").selectedIndex>0 Then
+      showPattern()
+   End If
+End Function
+
+Function fieldChange()
+   Dim el
+   Set el = window.event.srcElement
+   'alert(el.name)
+   showPattern()
+End Function
+
+function filterChange()
+   Dim el
+   Set el = window.event.srcElement
+   'alert(el.name)
+   showPattern()
+End Function
+
+Function valueChange()
+   Dim el
+   Set el = window.event.srcElement
+   'alert(el.name)
+   showPattern()
+End Function
+
+Function inputfileChange()
+' Show a sample of the input
+   Dim filename, strData
+   filename = document.fileform.inputfile.value
+   If Len(filename)>0 Then
+      If FileExists(filename) Then
+         Call LoadFromFileTOP(filename, strData, 100)
+         generateFieldList(strData)
+         document.forms.ioform.sampleinput.value = strData
+      Else
+         alert("Input file does not exist.")
+      End If
+   End If
+End Function
+
+Function loadPatternClick()
+' Load AWK pattern from Browse Box
+   document.forms.condform.patternfileselect.selectedIndex = 0
+   LoadPatternFile(document.forms.condform.patternfile.value)
+End Function
+
+Function loadPatternSelect()
+' Load AWK pattern from select box
+   document.forms.condform.patternfile.value = ""
+   If document.forms.condform.patternfileselect.selectedIndex<>0 Then LoadPatternFile(document.forms.condform.patternfileselect.options(document.forms.condform.patternfileselect.selectedIndex).text)
+End Function
+
+Function LoadPatternFile(filename)
+' Load selected AWK pattern from filename
+   Dim strData, t
+   If FileExists(filename) Then
+      document.forms.condform.awkpattern.value = ""
+      document.forms.condform.awkprogram.value = ""
+      Call LoadFromFile(filename, strData)
+      t = InStr(strData, "{")
+      If t>0 Then
+         document.forms.condform.awkpattern.value = Left(strData, t-1)
+         strData = Mid(strData, t)
+         't = InStrRev(strData, "}")
+         'If t>0 Then strData = Left(strData, t-1)
+         document.forms.condform.awkprogram.value = strData
+      Else
+         document.forms.condform.awkpattern.value = strData
+      End If
+      ' Set logic to ignore
+      document.all("logic_1").selectedIndex = 0
+   Else
+      alert("Pattern file """ & filename & """ does not exist.")
+   End If
+End Function
+
+Function generateFieldList(strData)
+' Generate a drop down list of field names from an IIS Log File
+   Dim t, temp, arrData, field, Count
+   
+   t = InStr(strData, "#Fields: ")
+   If t>0 Then
+      temp = Mid(strData, t+9)
+      t = InStr(temp, vbNewLine)
+      If t>0 Then
+         temp = Trim(Left(temp, t-1))
+         arrData = split(temp, " ")
+         temp = ""
+         count = 0
+         For Each field In arrData
+            count = count + 1
+            temp = temp & "<option value=""" & count & """>" & count & ". " & field & "</option>"
+         Next
+         document.all("tdFieldSelect").innerHTML = "<select name=""field_1"" onchange=""fieldChange()"">" & temp & "</select>"
+      End If
+   End If
+End Function
+
+Function init()
+   Call window.resizeTo(600, 800)
+   Call window.moveTo(100, 0)
+End Function
+
+Function DeterminePath()
+   path = replace(location.href, "file:///", "")
+   path = replace(path, "/", "\")
+   path = Left(path, InStrRev(path, "\"))
+End Function
+
+Function loadPatterns()
+' Load all .awk patterns in same folder
+   Dim fld, fl, temp
+   Set fld = fso.GetFolder(path)
+   document.write "<option>- select -</option>"
+   For Each fl In fld.Files
+      If Right(fl.name, 4)=".awk" Then
+         document.write "<option>" & fl.name & "</option>"
+      End If
+   Next
+   Set fld = Nothing
+   Set fl  = Nothing
+End Function
+
+DeterminePath()
+</script>
+</head>
+<body bgcolor="#FFFFFF" onload="init()">
+<table border=0 width="100%"><tr><td><div class="h2">AWK GUI</div></td><td valign=bottom align="right"><b>&copy;Marc Cawood 2003</b></td></tr></table>
+<form name="fileform" language=javascript onsubmit="runAWKMain(); return false;">
+<table id="tableform" class="display" border="0" cellpadding="2" cellspacing="1" width="500">
+ <tr>
+  <th colspan=2>
+   Files
+  </th>
+ </tr>
+ <tr>
+ <tr>
+  <td><b>Input file:</b></td>
+  <td class=white><input type="file" name="inputfile" onchange="inputfileChange()" onblur="inputfileChange()" style="width:400px"></td>
+ </tr>
+ <tr>
+  <td><b>Output file:</b></td>
+  <td class=white><input type="file" name="outputfile" style="width:400px"></td>
+ </tr>
+ <tr>
+  <td colspan="2" align="right">
+  <input type="button" value="Test Awk" onclick="runAWKSample()" style="font-weight:bold"> <input type="button" value="Run Awk" onclick="runAWKMain()" style="font-weight:bold">
+  </td>
+</table>
+</form>
+
+<form name="condform" language=javascript onsubmit="runAWKMain(); return false;">
+<input type="hidden" name="conditions" value="1">
+<table id="condtable" class="display" border="0" cellpadding="2" cellspacing="1" width="500">
+ <tr>
+  <th colspan="5">
+   Pattern
+  </th>
+ </tr>
+ <tr>
+  <th class="th1">Logic</th>
+  <th class="th1">Field</th>
+  <th class="th1">Filter</th>
+  <th class="th1">Value</th>
+  <th class="th1"><span title="Add Condition" onclick="addCondition()" class="click">+</span></th>
+ </tr>
+ <tr>
+  <td>
+   <select name="logic_1" onchange="logicChange()">
+    <option value="">-</option>
+    <option value="" selected></option>
+    <option value="&& ">And</option>
+    <option value="&& (">And (</option>
+    <option value="|| ">Or</option>
+    <option value="|| (">Or (</option>
+    <option value=")">)</option>
+   </select>
+  </td>
+  <td id="tdFieldSelect">
+   <input name="field_1" onchange="fieldChange()" size=3 maxlength=3 value="0">
+  </td>
+  <td>
+   <select name="filter_1" onchange="filterChange()">
+    <option value="equal">Equals</option>
+    <option value="!equal">Does not equal</option>
+    <option value="contain">Contains</option>
+    <option value="!contain">Does not contain</option>
+    <option value="start">Starts with</option>
+    <option value="end">Ends with</option>
+    <option value="custom">Custom</option>
+   </select>
+  </td>
+  <td>
+   <input name="value_1" type="text" style="width:200px" onchange="valueChange()" onkeyup="fieldChange()">
+  </td>
+  <!--
+  <td>
+  <span class="click" title="Delete Condition">X</span>
+  </td>
+  -->
+ </tr>
+ <tr>
+  <td colspan=5>
+   <textarea name="awkpattern" wrap="on" style="height:40px;"></textarea>
+  </td>
+ </tr>
+ <tr>
+  <td colspan="5">
+   Select <select onchange="loadPatternSelect()" style="width:120px" name="patternfileselect"><script>loadPatterns()</script></select> Or <input type="file" name="patternfile" onchange="loadPatternClick()"> <!--<input type="button" value="Load" onclick="loadPatternClick()">-->
+  </td>
+ </tr>
+ <tr>
+  <th colspan="5">
+   Program
+  </th>
+ </tr>
+ <tr>
+  <td colspan="5">
+   <textarea name="awkprogram" wrap="on" style="height:60px;"></textarea>
+  </td>
+ </tr>
+
+</table>
+</form>
+<form name="ioform">
+<table id="inputtable" class="display" border="0" cellpadding="2" cellspacing="1" width="500">
+ <tr>
+  <th>
+   Sample Input
+  </th>
+ </tr>
+ <tr>
+  <td>
+   <textarea name="sampleinput" wrap="off" style="height:100px;"></textarea>
+  </td>
+ </tr>
+</table>
+<br>
+<table id="outputtable" class="display" border="0" cellpadding="2" cellspacing="1" width="500">
+ <tr>
+  <th>
+   Sample Output (<a class=banner target="_blank" href="op.txt">op.txt</a>)
+  </th>
+ </tr>
+ <tr>
+  <td>
+   <textarea name="sampleoutput" wrap="off" style="height:100px;"></textarea>
+  </td>
+ </tr>
+</table>
+</form>
+</body>
+</html>

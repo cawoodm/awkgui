@@ -1,0 +1,1 @@
+mawk.exe -f G:\HTA\AWKGUI\awkgui.awk G:\HTA\AWKGUI\test.log > op.txt
