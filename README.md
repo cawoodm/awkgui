@@ -1,13 +1,14 @@
+#AWKGUI
 
-AWKGUI
-------
-Author: cawoodm@gmail.com>
+Author: cawoodm@gmail.com
 
 A simple HTA GUI for AWK.
-Load and save your favorite queries.
-Suited for analysing IIS log files.
 
-Tutorial:
+Load and save your favorite queries.
+
+Examples provided for analysing IIS log files.
+
+##Tutorial:
 
 1. Start awkgui.hta by double clicking.
 2. Choose the input file "test.log" (a sample IIS log file)
